@@ -1,64 +1,63 @@
-import { useState } from "react";
-import { Play, Image as ImageIcon, X } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Play, Image as ImageIcon, X, Loader2 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
 
 interface MediaItem {
-  id: number;
+  id: string;
   type: "video" | "image";
   title: string;
-  thumbnail: string;
-  videoUrl?: string;
-  description: string;
+  url: string;
+  thumbnail_url: string | null;
 }
 
-const mediaItems: MediaItem[] = [
-  {
-    id: 1,
-    type: "image",
-    title: "Conceito Visual - Personagem Principal",
-    thumbnail: "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=600&h=400&fit=crop",
-    description: "Design do protagonista do novo RPG"
-  },
-  {
-    id: 2,
-    type: "video",
-    title: "Gameplay Preview - Dungeon Explorer",
-    thumbnail: "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=600&h=400&fit=crop",
-    videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-    description: "Primeira demonstração do sistema de combate"
-  },
-  {
-    id: 3,
-    type: "image",
-    title: "Cenário - Floresta Sombria",
-    thumbnail: "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=600&h=400&fit=crop",
-    description: "Arte conceitual do primeiro level"
-  },
-  {
-    id: 4,
-    type: "image",
-    title: "UI Design - Menu Principal",
-    thumbnail: "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=600&h=400&fit=crop",
-    description: "Interface do usuário estilizada"
-  },
-  {
-    id: 5,
-    type: "video",
-    title: "Devlog #3 - Sistema de Inventário",
-    thumbnail: "https://images.unsplash.com/photo-1493711662062-fa541f7f3d24?w=600&h=400&fit=crop",
-    videoUrl: "https://www.youtube.com/embed/dQw4w9WgXcQ",
-    description: "Explicação do novo sistema de items"
-  },
-  {
-    id: 6,
-    type: "image",
-    title: "Boss Design - Dragão de Obsidiana",
-    thumbnail: "https://images.unsplash.com/photo-1509198397868-475647b2a1e5?w=600&h=400&fit=crop",
-    description: "Conceito do boss final"
-  },
-];
-
 const GallerySection = () => {
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchGallery = async () => {
+      const { data, error } = await supabase
+        .from('gallery')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (!error && data) {
+        setMediaItems(data as MediaItem[]);
+      }
+      setLoading(false);
+    };
+
+    fetchGallery();
+  }, []);
+
+  if (loading) {
+    return (
+      <section id="gallery" className="py-24 relative">
+        <div className="container mx-auto px-4 flex items-center justify-center py-12">
+          <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        </div>
+      </section>
+    );
+  }
+
+  if (mediaItems.length === 0) {
+    return (
+      <section id="gallery" className="py-24 relative">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="font-display text-4xl md:text-5xl font-bold mb-4">
+              <span className="text-foreground">GALERIA DE </span>
+              <span className="text-primary text-glow">DESENVOLVIMENTO</span>
+            </h2>
+            <p className="font-body text-lg text-muted-foreground max-w-2xl mx-auto">
+              Em breve teremos fotos e vídeos do desenvolvimento dos jogos
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section id="gallery" className="py-24 relative">
@@ -83,7 +82,7 @@ const GallerySection = () => {
             >
               <div className="aspect-video relative overflow-hidden">
                 <img
-                  src={item.thumbnail}
+                  src={item.thumbnail_url || item.url}
                   alt={item.title}
                   className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
                 />
@@ -116,9 +115,6 @@ const GallerySection = () => {
                 <h3 className="font-display text-lg font-semibold text-foreground mb-1 line-clamp-1">
                   {item.title}
                 </h3>
-                <p className="font-body text-sm text-muted-foreground line-clamp-2">
-                  {item.description}
-                </p>
               </div>
             </div>
           ))}
@@ -144,28 +140,25 @@ const GallerySection = () => {
 
             {selectedMedia.type === "video" ? (
               <div className="aspect-video">
-                <iframe
-                  src={selectedMedia.videoUrl}
+                <video
+                  src={selectedMedia.url}
                   className="w-full h-full"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
+                  controls
+                  autoPlay
                 />
               </div>
             ) : (
               <img
-                src={selectedMedia.thumbnail}
+                src={selectedMedia.url}
                 alt={selectedMedia.title}
                 className="w-full"
               />
             )}
 
             <div className="p-6">
-              <h3 className="font-display text-2xl font-bold text-foreground mb-2">
+              <h3 className="font-display text-2xl font-bold text-foreground">
                 {selectedMedia.title}
               </h3>
-              <p className="font-body text-muted-foreground">
-                {selectedMedia.description}
-              </p>
             </div>
           </div>
         </div>
