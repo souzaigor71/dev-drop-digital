@@ -21,6 +21,7 @@ interface Game {
 const DownloadsSection = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
+  const [purchasingGameId, setPurchasingGameId] = useState<string | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -39,7 +40,64 @@ const DownloadsSection = () => {
     fetchGames();
   }, []);
 
-  const handleDownload = (game: Game) => {
+  // Handle payment success callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const success = params.get('success');
+    const gameId = params.get('game_id');
+    const sessionId = params.get('session_id');
+
+    if (success === 'true' && gameId && sessionId) {
+      verifyAndDownload(sessionId, gameId);
+      // Clean URL params
+      window.history.replaceState({}, '', window.location.pathname);
+    } else if (params.get('canceled') === 'true') {
+      toast({
+        title: "Compra cancelada",
+        description: "Você cancelou a compra.",
+        variant: "destructive",
+      });
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const verifyAndDownload = async (sessionId: string, gameId: string) => {
+    try {
+      toast({
+        title: "Verificando pagamento...",
+        description: "Aguarde enquanto verificamos seu pagamento.",
+      });
+
+      const { data, error } = await supabase.functions.invoke('verify-payment', {
+        body: { sessionId, gameId },
+      });
+
+      if (error) throw error;
+
+      if (data.verified && data.fileUrl) {
+        toast({
+          title: "Pagamento confirmado!",
+          description: `Download de ${data.gameTitle} iniciando...`,
+        });
+        window.open(data.fileUrl, '_blank');
+      } else {
+        toast({
+          title: "Erro na verificação",
+          description: "Não foi possível verificar o pagamento. Entre em contato.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Error verifying payment:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao verificar pagamento. Tente novamente.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDownload = async (game: Game) => {
     if (game.is_free) {
       if (game.file_url) {
         window.open(game.file_url, '_blank');
@@ -55,10 +113,33 @@ const DownloadsSection = () => {
         });
       }
     } else {
-      toast({
-        title: "Redirecionando para pagamento",
-        description: `Prepare-se para comprar ${game.title} por R$ ${Number(game.price).toFixed(2)}`,
-      });
+      // Paid game - redirect to Stripe checkout
+      setPurchasingGameId(game.id);
+      try {
+        const { data, error } = await supabase.functions.invoke('create-checkout', {
+          body: {
+            gameId: game.id,
+            gameTitle: game.title,
+            price: Number(game.price),
+            returnUrl: window.location.origin + '/#downloads',
+          },
+        });
+
+        if (error) throw error;
+
+        if (data.url) {
+          window.location.href = data.url;
+        }
+      } catch (error) {
+        console.error('Error creating checkout:', error);
+        toast({
+          title: "Erro",
+          description: "Erro ao iniciar pagamento. Tente novamente.",
+          variant: "destructive",
+        });
+      } finally {
+        setPurchasingGameId(null);
+      }
     }
   };
 
@@ -180,8 +261,13 @@ const DownloadsSection = () => {
                     variant={game.is_free ? "free" : "price"}
                     className="w-full"
                     onClick={() => handleDownload(game)}
+                    disabled={purchasingGameId === game.id}
                   >
-                    <Download className="w-4 h-4" />
+                    {purchasingGameId === game.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Download className="w-4 h-4" />
+                    )}
                     {game.is_free ? "Download Grátis" : `Comprar - R$ ${Number(game.price).toFixed(2)}`}
                   </Button>
                 </div>
