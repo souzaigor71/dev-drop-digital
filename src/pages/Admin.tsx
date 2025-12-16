@@ -3,9 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Gamepad2, LogOut, Loader2, GamepadIcon, ImageIcon, ShieldAlert } from 'lucide-react';
+import { Gamepad2, LogOut, Loader2, GamepadIcon, ImageIcon, ShieldAlert, FileText } from 'lucide-react';
 import AdminGames from '@/components/admin/AdminGames';
 import AdminGallery from '@/components/admin/AdminGallery';
+import AdminPosts from '@/components/admin/AdminPosts';
 
 const Admin = () => {
   const { user, isAdmin, loading, signOut } = useAuth();
@@ -102,6 +103,10 @@ const Admin = () => {
               <ImageIcon className="w-4 h-4 mr-2" />
               Galeria
             </TabsTrigger>
+            <TabsTrigger value="posts" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <FileText className="w-4 h-4 mr-2" />
+              Publicações
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="games">
@@ -110,6 +115,10 @@ const Admin = () => {
 
           <TabsContent value="gallery">
             <AdminGallery />
+          </TabsContent>
+
+          <TabsContent value="posts">
+            <AdminPosts />
           </TabsContent>
         </Tabs>
       </main>
