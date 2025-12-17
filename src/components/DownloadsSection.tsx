@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Download, Star, Clock, HardDrive, Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Download, Star, Clock, HardDrive, Loader2, Ticket, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Game {
   id: string;
@@ -18,11 +20,26 @@ interface Game {
   file_url: string | null;
 }
 
+interface Coupon {
+  id: string;
+  code: string;
+  discount_percent: number | null;
+  discount_amount: number | null;
+  max_uses: number | null;
+  current_uses: number;
+  expires_at: string | null;
+  is_active: boolean;
+}
+
 const DownloadsSection = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [purchasingGameId, setPurchasingGameId] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState<string>("");
+  const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchGames = async () => {
@@ -69,6 +86,78 @@ const DownloadsSection = () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const validateCoupon = async () => {
+    if (!couponCode.trim()) return;
+
+    setValidatingCoupon(true);
+    const { data, error } = await supabase
+      .from('coupons')
+      .select('*')
+      .eq('code', couponCode.toUpperCase())
+      .eq('is_active', true)
+      .single();
+
+    setValidatingCoupon(false);
+
+    if (error || !data) {
+      toast({
+        title: "Cupom inválido",
+        description: "Este cupom não existe ou não está mais ativo.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check expiration
+    if (data.expires_at && new Date(data.expires_at) < new Date()) {
+      toast({
+        title: "Cupom expirado",
+        description: "Este cupom já expirou.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check max uses
+    if (data.max_uses && data.current_uses >= data.max_uses) {
+      toast({
+        title: "Cupom esgotado",
+        description: "Este cupom atingiu o limite máximo de usos.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setAppliedCoupon(data);
+    toast({
+      title: "Cupom aplicado!",
+      description: data.discount_percent 
+        ? `${data.discount_percent}% de desconto aplicado`
+        : `R$ ${Number(data.discount_amount).toFixed(2)} de desconto aplicado`,
+    });
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponCode("");
+  };
+
+  const calculateDiscount = (price: number): number => {
+    if (!appliedCoupon) return 0;
+    if (appliedCoupon.discount_percent) {
+      return (price * appliedCoupon.discount_percent) / 100;
+    }
+    if (appliedCoupon.discount_amount) {
+      return Math.min(Number(appliedCoupon.discount_amount), price);
+    }
+    return 0;
+  };
+
+  const getFinalPrice = (price: number): number => {
+    const discount = calculateDiscount(price);
+    return Math.max(0, price - discount);
   };
 
   const verifyAndDownload = async (sessionId: string, gameId: string) => {
@@ -126,12 +215,19 @@ const DownloadsSection = () => {
       // Paid game - redirect to Stripe checkout
       setPurchasingGameId(game.id);
       try {
+        const finalPrice = getFinalPrice(Number(game.price));
+        const discount = calculateDiscount(Number(game.price));
+
         const { data, error } = await supabase.functions.invoke('create-checkout', {
           body: {
             gameId: game.id,
             gameTitle: game.title,
-            price: Number(game.price),
+            price: finalPrice,
+            originalPrice: Number(game.price),
+            couponCode: appliedCoupon?.code || null,
+            discountAmount: discount,
             returnUrl: window.location.origin + '/#downloads',
+            userId: user?.id || null,
           },
         });
 
@@ -199,10 +295,48 @@ const DownloadsSection = () => {
           <p className="font-body text-lg text-muted-foreground max-w-2xl mx-auto">
             Jogos completos prontos para jogar. Alguns são pagos, outros são totalmente gratuitos!
           </p>
+
+          {/* Coupon Section */}
+          <div className="mt-8 max-w-md mx-auto">
+            {appliedCoupon ? (
+              <div className="flex items-center gap-2 bg-primary/20 border border-primary/50 rounded-lg p-3">
+                <Ticket className="w-5 h-5 text-primary" />
+                <span className="font-body text-sm flex-1">
+                  Cupom <strong>{appliedCoupon.code}</strong> aplicado!
+                  {appliedCoupon.discount_percent 
+                    ? ` (${appliedCoupon.discount_percent}% off)`
+                    : ` (R$ ${Number(appliedCoupon.discount_amount).toFixed(2)} off)`}
+                </span>
+                <Button variant="ghost" size="sm" onClick={removeCoupon}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Código do cupom"
+                  value={couponCode}
+                  onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                  className="uppercase"
+                />
+                <Button 
+                  variant="outline" 
+                  onClick={validateCoupon}
+                  disabled={validatingCoupon || !couponCode.trim()}
+                >
+                  {validatingCoupon ? <Loader2 className="w-4 h-4 animate-spin" /> : "Aplicar"}
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {games.map((game, index) => (
+          {games.map((game, index) => {
+            const discount = game.is_free ? 0 : calculateDiscount(Number(game.price));
+            const finalPrice = game.is_free ? 0 : getFinalPrice(Number(game.price));
+
+            return (
             <div
               key={game.id}
               className="group bg-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all duration-300 animate-fade-in"
@@ -228,6 +362,15 @@ const DownloadsSection = () => {
                       <span className="px-3 py-1 bg-primary/90 rounded font-display text-sm font-bold text-primary-foreground box-glow">
                         GRÁTIS
                       </span>
+                    ) : discount > 0 ? (
+                      <div className="flex flex-col gap-1">
+                        <span className="px-3 py-1 bg-destructive/90 rounded font-display text-xs font-bold text-destructive-foreground line-through">
+                          R$ {Number(game.price).toFixed(2)}
+                        </span>
+                        <span className="px-3 py-1 bg-accent/90 rounded font-display text-sm font-bold text-accent-foreground box-glow-accent">
+                          R$ {finalPrice.toFixed(2)}
+                        </span>
+                      </div>
                     ) : (
                       <span className="px-3 py-1 bg-accent/90 rounded font-display text-sm font-bold text-accent-foreground box-glow-accent">
                         R$ {Number(game.price).toFixed(2)}
@@ -278,12 +421,17 @@ const DownloadsSection = () => {
                     ) : (
                       <Download className="w-4 h-4" />
                     )}
-                    {game.is_free ? "Download Grátis" : `Comprar - R$ ${Number(game.price).toFixed(2)}`}
+                    {game.is_free 
+                      ? "Download Grátis" 
+                      : discount > 0 
+                        ? `Comprar - R$ ${finalPrice.toFixed(2)}`
+                        : `Comprar - R$ ${Number(game.price).toFixed(2)}`}
                   </Button>
                 </div>
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       </div>
     </section>

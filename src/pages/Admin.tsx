@@ -3,10 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Gamepad2, LogOut, Loader2, GamepadIcon, ImageIcon, ShieldAlert, FileText } from 'lucide-react';
+import { Gamepad2, LogOut, Loader2, GamepadIcon, ImageIcon, ShieldAlert, FileText, Ticket } from 'lucide-react';
 import AdminGames from '@/components/admin/AdminGames';
 import AdminGallery from '@/components/admin/AdminGallery';
 import AdminPosts from '@/components/admin/AdminPosts';
+import AdminCoupons from '@/components/admin/AdminCoupons';
 
 const Admin = () => {
   const { user, isAdmin, loading, signOut } = useAuth();
@@ -107,6 +108,10 @@ const Admin = () => {
               <FileText className="w-4 h-4 mr-2" />
               Publicações
             </TabsTrigger>
+            <TabsTrigger value="coupons" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+              <Ticket className="w-4 h-4 mr-2" />
+              Cupons
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="games">
@@ -119,6 +124,10 @@ const Admin = () => {
 
           <TabsContent value="posts">
             <AdminPosts />
+          </TabsContent>
+
+          <TabsContent value="coupons">
+            <AdminCoupons />
           </TabsContent>
         </Tabs>
       </main>

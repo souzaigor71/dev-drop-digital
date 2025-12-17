@@ -62,6 +62,50 @@ serve(async (req) => {
       .update({ downloads: (game.downloads || 0) + 1 })
       .eq("id", gameId);
 
+    // Get metadata from session
+    const metadata = session.metadata || {};
+    const userId = metadata.user_id || null;
+    const couponCode = metadata.coupon_code || null;
+    const pricePaid = parseFloat(metadata.price_paid || "0");
+    const discountAmount = parseFloat(metadata.discount_amount || "0");
+
+    // Save purchase if user is logged in
+    if (userId) {
+      const { error: purchaseError } = await supabase
+        .from("purchases")
+        .insert({
+          user_id: userId,
+          game_id: gameId,
+          price_paid: pricePaid,
+          coupon_code: couponCode,
+          discount_amount: discountAmount,
+        });
+
+      if (purchaseError) {
+        console.error("Error saving purchase:", purchaseError);
+      } else {
+        console.log("Purchase saved for user:", userId);
+      }
+    }
+
+    // Increment coupon usage if coupon was used
+    if (couponCode) {
+      // Get current coupon data
+      const { data: coupon } = await supabase
+        .from("coupons")
+        .select("current_uses")
+        .eq("code", couponCode)
+        .single();
+
+      if (coupon) {
+        await supabase
+          .from("coupons")
+          .update({ current_uses: (coupon.current_uses || 0) + 1 })
+          .eq("code", couponCode);
+        console.log("Coupon usage incremented:", couponCode);
+      }
+    }
+
     console.log("Payment verified successfully for game:", game.title);
 
     return new Response(
