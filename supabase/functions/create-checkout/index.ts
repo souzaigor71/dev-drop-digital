@@ -12,9 +12,9 @@ serve(async (req) => {
   }
 
   try {
-    const { gameId, gameTitle, price, returnUrl } = await req.json();
+    const { gameId, gameTitle, price, originalPrice, couponCode, discountAmount, returnUrl, userId } = await req.json();
 
-    console.log("Creating checkout session for:", { gameId, gameTitle, price });
+    console.log("Creating checkout session for:", { gameId, gameTitle, price, originalPrice, couponCode, discountAmount, userId });
 
     if (!gameId || !gameTitle || price === undefined) {
       throw new Error("Missing required fields: gameId, gameTitle, or price");
@@ -23,6 +23,12 @@ serve(async (req) => {
     const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") || "", {
       apiVersion: "2023-10-16",
     });
+
+    // Build line item description
+    let description = `Download do jogo ${gameTitle}`;
+    if (couponCode && discountAmount > 0) {
+      description += ` (Cupom: ${couponCode} - R$ ${discountAmount.toFixed(2)} de desconto)`;
+    }
 
     // Create a checkout session
     const session = await stripe.checkout.sessions.create({
@@ -33,7 +39,7 @@ serve(async (req) => {
             currency: "brl",
             product_data: {
               name: gameTitle,
-              description: `Download do jogo ${gameTitle}`,
+              description: description,
             },
             unit_amount: Math.round(price * 100), // Convert to cents
           },
@@ -45,6 +51,11 @@ serve(async (req) => {
       cancel_url: `${returnUrl}?canceled=true`,
       metadata: {
         game_id: gameId,
+        user_id: userId || '',
+        coupon_code: couponCode || '',
+        original_price: originalPrice?.toString() || price.toString(),
+        discount_amount: discountAmount?.toString() || '0',
+        price_paid: price.toString(),
       },
     });
 
