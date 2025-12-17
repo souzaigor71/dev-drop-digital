@@ -61,6 +61,16 @@ const DownloadsSection = () => {
     }
   }, []);
 
+  const triggerDownload = (url: string, filename: string) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.target = '_blank';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const verifyAndDownload = async (sessionId: string, gameId: string) => {
     try {
       toast({
@@ -79,7 +89,7 @@ const DownloadsSection = () => {
           title: "Pagamento confirmado!",
           description: `Download de ${data.gameTitle} iniciando...`,
         });
-        window.open(data.fileUrl, '_blank');
+        triggerDownload(data.fileUrl, data.gameTitle);
       } else {
         toast({
           title: "Erro na verificação",
@@ -100,7 +110,7 @@ const DownloadsSection = () => {
   const handleDownload = async (game: Game) => {
     if (game.is_free) {
       if (game.file_url) {
-        window.open(game.file_url, '_blank');
+        triggerDownload(game.file_url, game.title);
         toast({
           title: "Download iniciado!",
           description: `${game.title} está sendo baixado.`,
