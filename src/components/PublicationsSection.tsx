@@ -43,6 +43,29 @@ const PublicationsSection = () => {
     return content.substring(0, maxLength).trim() + '...';
   };
 
+  const renderContentWithLinks = (content: string) => {
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const parts = content.split(urlRegex);
+    
+    return parts.map((part, index) => {
+      if (urlRegex.test(part)) {
+        return (
+          <a
+            key={index}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary hover:underline break-all"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </a>
+        );
+      }
+      return part;
+    });
+  };
+
   if (loading) {
     return (
       <section id="publications" className="py-24 relative">
@@ -119,7 +142,7 @@ const PublicationsSection = () => {
                 </h3>
 
                 <p className="font-body text-sm text-muted-foreground flex-1">
-                  {truncateContent(post.content)}
+                  {renderContentWithLinks(truncateContent(post.content))}
                 </p>
               </div>
             </article>

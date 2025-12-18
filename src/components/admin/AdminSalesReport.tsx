@@ -1,6 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, DollarSign, Ticket, TrendingUp, Package } from 'lucide-react';
+import { Loader2, DollarSign, Ticket, TrendingUp, Package, Download, Calendar } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Purchase {
   id: string;
@@ -21,10 +23,12 @@ interface CouponUsage {
   totalDiscount: number;
 }
 
+type PeriodFilter = 'all' | 'today' | 'week' | 'month' | 'year';
+
 const AdminSalesReport = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
-  const [couponUsage, setCouponUsage] = useState<CouponUsage[]>([]);
+  const [periodFilter, setPeriodFilter] = useState<PeriodFilter>('all');
 
   useEffect(() => {
     fetchData();
@@ -41,32 +45,91 @@ const AdminSalesReport = () => {
 
     if (!error && purchasesData) {
       setPurchases(purchasesData);
-
-      // Calculate coupon usage
-      const couponMap = new Map<string, CouponUsage>();
-      purchasesData.forEach((p) => {
-        if (p.coupon_code) {
-          const existing = couponMap.get(p.coupon_code);
-          if (existing) {
-            existing.uses += 1;
-            existing.totalDiscount += Number(p.discount_amount) || 0;
-          } else {
-            couponMap.set(p.coupon_code, {
-              code: p.coupon_code,
-              uses: 1,
-              totalDiscount: Number(p.discount_amount) || 0,
-            });
-          }
-        }
-      });
-      setCouponUsage(Array.from(couponMap.values()).sort((a, b) => b.uses - a.uses));
     }
     setLoading(false);
   };
 
-  const totalRevenue = purchases.reduce((sum, p) => sum + Number(p.price_paid), 0);
-  const totalDiscount = purchases.reduce((sum, p) => sum + (Number(p.discount_amount) || 0), 0);
-  const purchasesWithCoupon = purchases.filter(p => p.coupon_code).length;
+  const getFilteredPurchases = useMemo(() => {
+    if (periodFilter === 'all') return purchases;
+
+    const now = new Date();
+    let startDate: Date;
+
+    switch (periodFilter) {
+      case 'today':
+        startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'week':
+        startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'year':
+        startDate = new Date(now.getFullYear(), 0, 1);
+        break;
+      default:
+        return purchases;
+    }
+
+    return purchases.filter(p => new Date(p.created_at) >= startDate);
+  }, [purchases, periodFilter]);
+
+  const couponUsage = useMemo(() => {
+    const couponMap = new Map<string, CouponUsage>();
+    getFilteredPurchases.forEach((p) => {
+      if (p.coupon_code) {
+        const existing = couponMap.get(p.coupon_code);
+        if (existing) {
+          existing.uses += 1;
+          existing.totalDiscount += Number(p.discount_amount) || 0;
+        } else {
+          couponMap.set(p.coupon_code, {
+            code: p.coupon_code,
+            uses: 1,
+            totalDiscount: Number(p.discount_amount) || 0,
+          });
+        }
+      }
+    });
+    return Array.from(couponMap.values()).sort((a, b) => b.uses - a.uses);
+  }, [getFilteredPurchases]);
+
+  const totalRevenue = getFilteredPurchases.reduce((sum, p) => sum + Number(p.price_paid), 0);
+  const totalDiscount = getFilteredPurchases.reduce((sum, p) => sum + (Number(p.discount_amount) || 0), 0);
+  const purchasesWithCoupon = getFilteredPurchases.filter(p => p.coupon_code).length;
+
+  const exportToCSV = () => {
+    const headers = ['Data', 'Jogo', 'Cupom', 'Desconto', 'Valor Pago'];
+    const rows = getFilteredPurchases.map(p => [
+      new Date(p.created_at).toLocaleDateString('pt-BR'),
+      p.games?.title || 'Jogo removido',
+      p.coupon_code || '-',
+      p.discount_amount ? `R$ ${Number(p.discount_amount).toFixed(2)}` : '-',
+      `R$ ${Number(p.price_paid).toFixed(2)}`
+    ]);
+
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(row => row.map(cell => `"${cell}"`).join(','))
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(blob);
+    link.download = `relatorio-vendas-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+  };
+
+  const getPeriodLabel = (period: PeriodFilter) => {
+    switch (period) {
+      case 'today': return 'Hoje';
+      case 'week': return 'Última Semana';
+      case 'month': return 'Este Mês';
+      case 'year': return 'Este Ano';
+      default: return 'Todo Período';
+    }
+  };
 
   if (loading) {
     return (
@@ -78,7 +141,30 @@ const AdminSalesReport = () => {
 
   return (
     <div className="space-y-6">
-      <h2 className="font-display text-2xl font-bold text-foreground">Relatório de Vendas</h2>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <h2 className="font-display text-2xl font-bold text-foreground">Relatório de Vendas</h2>
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Calendar className="w-4 h-4 text-muted-foreground" />
+            <Select value={periodFilter} onValueChange={(v) => setPeriodFilter(v as PeriodFilter)}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todo Período</SelectItem>
+                <SelectItem value="today">Hoje</SelectItem>
+                <SelectItem value="week">Última Semana</SelectItem>
+                <SelectItem value="month">Este Mês</SelectItem>
+                <SelectItem value="year">Este Ano</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Button variant="outline" size="sm" onClick={exportToCSV} disabled={getFilteredPurchases.length === 0}>
+            <Download className="w-4 h-4 mr-2" />
+            Exportar CSV
+          </Button>
+        </div>
+      </div>
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -101,7 +187,7 @@ const AdminSalesReport = () => {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Vendas Totais</p>
-              <p className="font-display text-xl font-bold">{purchases.length}</p>
+              <p className="font-display text-xl font-bold">{getFilteredPurchases.length}</p>
             </div>
           </div>
         </div>
@@ -161,8 +247,8 @@ const AdminSalesReport = () => {
       {/* Recent Purchases */}
       <div className="bg-card border border-border rounded-lg p-4">
         <h3 className="font-display text-lg font-bold mb-4">Vendas Recentes</h3>
-        {purchases.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">Nenhuma venda registrada ainda.</p>
+        {getFilteredPurchases.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">Nenhuma venda registrada neste período.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full">
@@ -176,7 +262,7 @@ const AdminSalesReport = () => {
                 </tr>
               </thead>
               <tbody>
-                {purchases.map((purchase) => (
+                {getFilteredPurchases.map((purchase) => (
                   <tr key={purchase.id} className="border-b border-border/50 hover:bg-muted/30">
                     <td className="py-2 px-3 text-sm">
                       {new Date(purchase.created_at).toLocaleDateString('pt-BR')}
