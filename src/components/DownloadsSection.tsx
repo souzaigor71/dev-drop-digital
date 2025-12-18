@@ -29,6 +29,7 @@ interface Coupon {
   current_uses: number;
   expires_at: string | null;
   is_active: boolean;
+  game_id: string | null;
 }
 
 const DownloadsSection = () => {
@@ -38,6 +39,7 @@ const DownloadsSection = () => {
   const [couponCode, setCouponCode] = useState<string>("");
   const [appliedCoupon, setAppliedCoupon] = useState<Coupon | null>(null);
   const [validatingCoupon, setValidatingCoupon] = useState(false);
+  const [couponGameId, setCouponGameId] = useState<string | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -131,21 +133,31 @@ const DownloadsSection = () => {
     }
 
     setAppliedCoupon(data);
+    setCouponGameId(data.game_id);
     toast({
       title: "Cupom aplicado!",
       description: data.discount_percent 
-        ? `${data.discount_percent}% de desconto aplicado`
-        : `R$ ${Number(data.discount_amount).toFixed(2)} de desconto aplicado`,
+        ? `${data.discount_percent}% de desconto aplicado${data.game_id ? ' (apenas para jogo específico)' : ''}`
+        : `R$ ${Number(data.discount_amount).toFixed(2)} de desconto aplicado${data.game_id ? ' (apenas para jogo específico)' : ''}`,
     });
   };
 
   const removeCoupon = () => {
     setAppliedCoupon(null);
     setCouponCode("");
+    setCouponGameId(null);
   };
 
-  const calculateDiscount = (price: number): number => {
-    if (!appliedCoupon) return 0;
+  const isCouponValidForGame = (gameId: string): boolean => {
+    if (!appliedCoupon) return false;
+    // If coupon has no game_id, it's valid for all games
+    if (!couponGameId) return true;
+    // Otherwise, only valid for the specific game
+    return couponGameId === gameId;
+  };
+
+  const calculateDiscount = (price: number, gameId: string): number => {
+    if (!appliedCoupon || !isCouponValidForGame(gameId)) return 0;
     if (appliedCoupon.discount_percent) {
       return (price * appliedCoupon.discount_percent) / 100;
     }
@@ -155,8 +167,8 @@ const DownloadsSection = () => {
     return 0;
   };
 
-  const getFinalPrice = (price: number): number => {
-    const discount = calculateDiscount(price);
+  const getFinalPrice = (price: number, gameId: string): number => {
+    const discount = calculateDiscount(price, gameId);
     return Math.max(0, price - discount);
   };
 
@@ -215,8 +227,9 @@ const DownloadsSection = () => {
       // Paid game - redirect to Stripe checkout
       setPurchasingGameId(game.id);
       try {
-        const finalPrice = getFinalPrice(Number(game.price));
-        const discount = calculateDiscount(Number(game.price));
+        const finalPrice = getFinalPrice(Number(game.price), game.id);
+        const discount = calculateDiscount(Number(game.price), game.id);
+        const usedCoupon = isCouponValidForGame(game.id) ? appliedCoupon?.code : null;
 
         const { data, error } = await supabase.functions.invoke('create-checkout', {
           body: {
@@ -224,7 +237,7 @@ const DownloadsSection = () => {
             gameTitle: game.title,
             price: finalPrice,
             originalPrice: Number(game.price),
-            couponCode: appliedCoupon?.code || null,
+            couponCode: usedCoupon || null,
             discountAmount: discount,
             returnUrl: window.location.origin + '/#downloads',
             userId: user?.id || null,
@@ -333,8 +346,9 @@ const DownloadsSection = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {games.map((game, index) => {
-            const discount = game.is_free ? 0 : calculateDiscount(Number(game.price));
-            const finalPrice = game.is_free ? 0 : getFinalPrice(Number(game.price));
+            const validForGame = isCouponValidForGame(game.id);
+            const discount = game.is_free ? 0 : (validForGame ? calculateDiscount(Number(game.price), game.id) : 0);
+            const finalPrice = game.is_free ? 0 : (validForGame ? getFinalPrice(Number(game.price), game.id) : Number(game.price));
 
             return (
             <div

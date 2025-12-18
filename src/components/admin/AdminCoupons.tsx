@@ -13,6 +13,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+interface Game {
+  id: string;
+  title: string;
+}
 
 interface Coupon {
   id: string;
@@ -24,10 +36,13 @@ interface Coupon {
   expires_at: string | null;
   is_active: boolean;
   created_at: string;
+  game_id: string | null;
+  games?: { title: string } | null;
 }
 
 const AdminCoupons = () => {
   const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -41,16 +56,23 @@ const AdminCoupons = () => {
     max_uses: '',
     expires_at: '',
     is_active: true,
+    game_id: '',
   });
 
   useEffect(() => {
     fetchCoupons();
+    fetchGames();
   }, []);
+
+  const fetchGames = async () => {
+    const { data } = await supabase.from('games').select('id, title').order('title');
+    if (data) setGames(data);
+  };
 
   const fetchCoupons = async () => {
     const { data, error } = await supabase
       .from('coupons')
-      .select('*')
+      .select('*, games(title)')
       .order('created_at', { ascending: false });
 
     if (!error && data) {
@@ -67,6 +89,7 @@ const AdminCoupons = () => {
       max_uses: '',
       expires_at: '',
       is_active: true,
+      game_id: '',
     });
     setEditingCoupon(null);
   };
@@ -80,6 +103,7 @@ const AdminCoupons = () => {
       max_uses: coupon.max_uses?.toString() || '',
       expires_at: coupon.expires_at ? coupon.expires_at.split('T')[0] : '',
       is_active: coupon.is_active,
+      game_id: coupon.game_id || '',
     });
     setDialogOpen(true);
   };
@@ -104,6 +128,7 @@ const AdminCoupons = () => {
       max_uses: formData.max_uses ? Number(formData.max_uses) : null,
       expires_at: formData.expires_at ? new Date(formData.expires_at).toISOString() : null,
       is_active: formData.is_active,
+      game_id: formData.game_id || null,
     };
 
     let error;
@@ -242,6 +267,23 @@ const AdminCoupons = () => {
                 />
                 <Label>Cupom Ativo</Label>
               </div>
+              <div>
+                <Label>Jogo Específico (opcional)</Label>
+                <Select
+                  value={formData.game_id}
+                  onValueChange={(value) => setFormData({ ...formData, game_id: value === 'all' ? '' : value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos os jogos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos os jogos</SelectItem>
+                    {games.map((game) => (
+                      <SelectItem key={game.id} value={game.id}>{game.title}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
               <Button onClick={handleSave} disabled={saving} className="w-full" variant="gaming">
                 {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                 {editingCoupon ? 'Atualizar' : 'Criar Cupom'}
@@ -274,6 +316,9 @@ const AdminCoupons = () => {
                       {coupon.discount_percent
                         ? `${coupon.discount_percent}% de desconto`
                         : `R$ ${Number(coupon.discount_amount).toFixed(2)} de desconto`}
+                      {coupon.games?.title && (
+                        <span className="ml-2 text-primary">• {coupon.games.title}</span>
+                      )}
                     </p>
                   </div>
                 </div>
