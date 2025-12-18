@@ -22,6 +22,7 @@ export type Database = {
           discount_amount: number | null
           discount_percent: number | null
           expires_at: string | null
+          game_id: string | null
           id: string
           is_active: boolean | null
           max_uses: number | null
@@ -33,6 +34,7 @@ export type Database = {
           discount_amount?: number | null
           discount_percent?: number | null
           expires_at?: string | null
+          game_id?: string | null
           id?: string
           is_active?: boolean | null
           max_uses?: number | null
@@ -44,11 +46,20 @@ export type Database = {
           discount_amount?: number | null
           discount_percent?: number | null
           expires_at?: string | null
+          game_id?: string | null
           id?: string
           is_active?: boolean | null
           max_uses?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "coupons_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       gallery: {
         Row: {
