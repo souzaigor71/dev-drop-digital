@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Loader2, DollarSign, Ticket, TrendingUp, Package, Download, Calendar } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 
 interface Purchase {
   id: string;
@@ -98,6 +99,44 @@ const AdminSalesReport = () => {
   const totalRevenue = getFilteredPurchases.reduce((sum, p) => sum + Number(p.price_paid), 0);
   const totalDiscount = getFilteredPurchases.reduce((sum, p) => sum + (Number(p.discount_amount) || 0), 0);
   const purchasesWithCoupon = getFilteredPurchases.filter(p => p.coupon_code).length;
+
+  // Chart data - group by date
+  const chartData = useMemo(() => {
+    const groupedByDate = new Map<string, { date: string; revenue: number; sales: number }>();
+    
+    getFilteredPurchases.forEach(p => {
+      const date = new Date(p.created_at).toLocaleDateString('pt-BR');
+      const existing = groupedByDate.get(date);
+      if (existing) {
+        existing.revenue += Number(p.price_paid);
+        existing.sales += 1;
+      } else {
+        groupedByDate.set(date, { date, revenue: Number(p.price_paid), sales: 1 });
+      }
+    });
+
+    return Array.from(groupedByDate.values()).reverse().slice(-14);
+  }, [getFilteredPurchases]);
+
+  // Top games data
+  const topGamesData = useMemo(() => {
+    const gameMap = new Map<string, { name: string; revenue: number; sales: number }>();
+    
+    getFilteredPurchases.forEach(p => {
+      const gameName = p.games?.title || 'Removido';
+      const existing = gameMap.get(gameName);
+      if (existing) {
+        existing.revenue += Number(p.price_paid);
+        existing.sales += 1;
+      } else {
+        gameMap.set(gameName, { name: gameName, revenue: Number(p.price_paid), sales: 1 });
+      }
+    });
+
+    return Array.from(gameMap.values())
+      .sort((a, b) => b.revenue - a.revenue)
+      .slice(0, 5);
+  }, [getFilteredPurchases]);
 
   const exportToCSV = () => {
     const headers = ['Data', 'Jogo', 'Cupom', 'Desconto', 'Valor Pago'];
@@ -216,6 +255,94 @@ const AdminSalesReport = () => {
           </div>
         </div>
       </div>
+
+      {/* Charts */}
+      {chartData.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Revenue Chart */}
+          <div className="bg-card border border-border rounded-lg p-4">
+            <h3 className="font-display text-lg font-bold mb-4">Receita por Período</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={chartData}>
+                <defs>
+                  <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3}/>
+                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0}/>
+                  </linearGradient>
+                </defs>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis 
+                  dataKey="date" 
+                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }} 
+                  tickLine={false}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                  tickFormatter={(value) => `R$${value}`}
+                  tickLine={false}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                    color: 'hsl(var(--foreground))'
+                  }}
+                  formatter={(value: number) => [`R$ ${value.toFixed(2)}`, 'Receita']}
+                />
+                <Area 
+                  type="monotone" 
+                  dataKey="revenue" 
+                  stroke="hsl(var(--primary))" 
+                  fillOpacity={1} 
+                  fill="url(#colorRevenue)" 
+                  strokeWidth={2}
+                />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Top Games Chart */}
+          <div className="bg-card border border-border rounded-lg p-4">
+            <h3 className="font-display text-lg font-bold mb-4">Top Jogos por Receita</h3>
+            <ResponsiveContainer width="100%" height={250}>
+              <BarChart data={topGamesData} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis 
+                  type="number" 
+                  tick={{ fontSize: 12, fill: 'hsl(var(--muted-foreground))' }}
+                  tickFormatter={(value) => `R$${value}`}
+                  tickLine={false}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                  width={100}
+                  tickLine={false}
+                  axisLine={{ stroke: 'hsl(var(--border))' }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '8px',
+                    color: 'hsl(var(--foreground))'
+                  }}
+                  formatter={(value: number, name: string) => [
+                    name === 'revenue' ? `R$ ${value.toFixed(2)}` : value,
+                    name === 'revenue' ? 'Receita' : 'Vendas'
+                  ]}
+                />
+                <Bar dataKey="revenue" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Coupon Usage */}
       {couponUsage.length > 0 && (
