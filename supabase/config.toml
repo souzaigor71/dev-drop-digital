@@ -5,3 +5,6 @@ verify_jwt = false
 
 [functions.verify-payment]
 verify_jwt = false
+
+[functions.send-sale-notification]
+verify_jwt = false

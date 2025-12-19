@@ -2,6 +2,28 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
+// Function to send sale notification in background
+async function sendSaleNotification(supabaseUrl: string, gameTitle: string, pricePaid: number, customerEmail: string, couponCode?: string, discountAmount?: number) {
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/send-sale-notification`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        gameTitle,
+        pricePaid,
+        customerEmail,
+        couponCode,
+        discountAmount,
+      }),
+    });
+    console.log("Sale notification sent:", await response.json());
+  } catch (error) {
+    console.error("Failed to send sale notification:", error);
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -107,6 +129,11 @@ serve(async (req) => {
     }
 
     console.log("Payment verified successfully for game:", game.title);
+
+    // Send email notification in background (fire and forget)
+    const customerEmail = session.customer_details?.email || session.customer_email || 'unknown@email.com';
+    sendSaleNotification(supabaseUrl, game.title, pricePaid, customerEmail, couponCode || undefined, discountAmount || undefined)
+      .catch(err => console.error("Background notification failed:", err));
 
     return new Response(
       JSON.stringify({ 
