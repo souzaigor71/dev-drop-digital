@@ -11,6 +11,7 @@ interface SaleNotificationRequest {
   gameTitle: string;
   pricePaid: number;
   customerEmail: string;
+  fileUrl?: string;
   couponCode?: string;
   discountAmount?: number;
 }
@@ -23,9 +24,9 @@ serve(async (req) => {
   }
 
   try {
-    const { gameTitle, pricePaid, customerEmail, couponCode, discountAmount }: SaleNotificationRequest = await req.json();
+    const { gameTitle, pricePaid, customerEmail, fileUrl, couponCode, discountAmount }: SaleNotificationRequest = await req.json();
 
-    console.log("Sending sale notification:", { gameTitle, pricePaid, customerEmail });
+    console.log("Sending sale notification:", { gameTitle, pricePaid, customerEmail, fileUrl });
 
     // Email para o admin sobre a venda
     const adminEmailPromise = fetch("https://api.resend.com/emails", {
@@ -64,6 +65,17 @@ serve(async (req) => {
     });
 
     // Email de confirmação para o cliente
+    const downloadButton = fileUrl ? `
+      <div style="text-align: center; margin: 30px 0;">
+        <a href="${fileUrl}" style="display: inline-block; background: linear-gradient(135deg, #00ff88, #00cc6a); color: #1a1a2e; padding: 15px 40px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 18px;">
+          ⬇️ BAIXAR JOGO
+        </a>
+      </div>
+      <p style="color: #b0b0b0; font-size: 12px; text-align: center;">
+        Ou copie o link: <a href="${fileUrl}" style="color: #00ff88;">${fileUrl}</a>
+      </p>
+    ` : '';
+
     const customerEmailPromise = fetch("https://api.resend.com/emails", {
       method: "POST",
       headers: {
@@ -84,8 +96,10 @@ serve(async (req) => {
               <p style="color: #00ff88; font-size: 24px; font-weight: bold; margin: 20px 0;">Total: R$ ${pricePaid.toFixed(2)}</p>
             </div>
             
+            ${downloadButton}
+            
             <p style="color: #ffffff; margin: 20px 0;">
-              Seu jogo já está disponível para download na sua conta! Acesse a seção "Meus Jogos" para baixar.
+              Seu jogo também está disponível para download na sua conta! Acesse a seção "Meus Jogos" a qualquer momento.
             </p>
             
             <p style="color: #b0b0b0; font-size: 12px; text-align: center; margin-top: 30px;">

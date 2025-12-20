@@ -3,7 +3,15 @@ import Stripe from "https://esm.sh/stripe@14.21.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // Function to send sale notification in background
-async function sendSaleNotification(supabaseUrl: string, gameTitle: string, pricePaid: number, customerEmail: string, couponCode?: string, discountAmount?: number) {
+async function sendSaleNotification(
+  supabaseUrl: string, 
+  gameTitle: string, 
+  pricePaid: number, 
+  customerEmail: string, 
+  fileUrl?: string,
+  couponCode?: string, 
+  discountAmount?: number
+) {
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/send-sale-notification`, {
       method: 'POST',
@@ -14,6 +22,7 @@ async function sendSaleNotification(supabaseUrl: string, gameTitle: string, pric
         gameTitle,
         pricePaid,
         customerEmail,
+        fileUrl,
         couponCode,
         discountAmount,
       }),
@@ -132,7 +141,7 @@ serve(async (req) => {
 
     // Send email notification in background (fire and forget)
     const customerEmail = session.customer_details?.email || session.customer_email || 'unknown@email.com';
-    sendSaleNotification(supabaseUrl, game.title, pricePaid, customerEmail, couponCode || undefined, discountAmount || undefined)
+    sendSaleNotification(supabaseUrl, game.title, pricePaid, customerEmail, game.file_url || undefined, couponCode || undefined, discountAmount || undefined)
       .catch(err => console.error("Background notification failed:", err));
 
     return new Response(
