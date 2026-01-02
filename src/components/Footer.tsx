@@ -1,5 +1,6 @@
 import { Gamepad2, Heart, Copy, Check } from "lucide-react";
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 
@@ -20,7 +21,7 @@ const Footer = () => {
         <div className="flex flex-col gap-6">
           {/* Seção de Doação PIX */}
           <div className="flex flex-col items-center gap-3 p-4 bg-background/50 rounded-lg border border-border">
-            <div className="flex items-center gap-2 text-primary">
+            <div className="flex items-center gap-2 text-pink-500">
               <Heart className="w-5 h-5" />
               <span className="font-display text-sm font-bold">Apoie o Studio</span>
             </div>
@@ -40,6 +41,11 @@ const Footer = () => {
                 {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
               </Button>
             </div>
+            <Link to="/apoiar">
+              <Button variant="link" size="sm" className="text-pink-500 hover:text-pink-400">
+                Ver página de apoio completa →
+              </Button>
+            </Link>
           </div>
 
           {/* Footer original */}

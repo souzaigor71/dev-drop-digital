@@ -1,4 +1,4 @@
-import { Gamepad2, Shield } from "lucide-react";
+import { Gamepad2, Shield, Heart } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import PurchaseHistory from "./PurchaseHistory";
@@ -26,6 +26,13 @@ const Header = () => {
           <a href="#about" className="hidden md:block font-body text-sm font-medium text-muted-foreground hover:text-primary transition-colors uppercase tracking-wider">
             Sobre
           </a>
+          <Link 
+            to="/apoiar" 
+            className="hidden md:flex items-center gap-1 font-body text-sm font-medium text-pink-500 hover:text-pink-400 transition-colors uppercase tracking-wider"
+          >
+            <Heart className="w-4 h-4" />
+            Apoiar
+          </Link>
           {user && <PurchaseHistory />}
           <Link 
             to="/auth" 
