@@ -61,6 +61,33 @@ export type Database = {
           },
         ]
       }
+      donations: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          is_public: boolean | null
+          message: string | null
+          name: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          is_public?: boolean | null
+          message?: string | null
+          name: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          is_public?: boolean | null
+          message?: string | null
+          name?: string
+        }
+        Relationships: []
+      }
       gallery: {
         Row: {
           created_at: string | null
