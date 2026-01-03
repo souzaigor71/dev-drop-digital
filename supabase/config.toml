@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.send-sale-notification]
 verify_jwt = false
+
+[functions.send-donation-thanks]
+verify_jwt = false
