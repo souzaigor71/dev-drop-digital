@@ -1,14 +1,16 @@
-import { useState, useEffect } from "react";
-import { Heart, Copy, Check, ArrowLeft, Users, Sparkles, Trophy, Crown, Star, Medal, Award } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Heart, Copy, Check, ArrowLeft, Users, Sparkles, Trophy, Crown, Star, Medal, Award, Target, Bell } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
+import confetti from "canvas-confetti";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -18,6 +20,14 @@ const suggestedAmounts = [
   { value: 25, label: "Apoiador 💪", description: "Apoio significativo" },
   { value: 50, label: "Fã 🌟", description: "Você é incrível!" },
   { value: 100, label: "Patrono 👑", description: "Apoio premium" },
+];
+
+// Fundraising goals configuration
+const FUNDRAISING_GOALS = [
+  { target: 500, label: "Meta Inicial", description: "Equipamentos básicos", icon: "🎯" },
+  { target: 1000, label: "Meta Bronze", description: "Novo projeto de jogo", icon: "🥉" },
+  { target: 2500, label: "Meta Prata", description: "Recursos avançados", icon: "🥈" },
+  { target: 5000, label: "Meta Ouro", description: "Jogo completo", icon: "🏆" },
 ];
 
 interface Donation {
@@ -56,11 +66,43 @@ const getBadgeForAmount = (amount: number) => {
   return { label: "💚 Apoiador", color: "text-primary", bg: "bg-primary/20" };
 };
 
+const fireConfetti = () => {
+  const duration = 3000;
+  const animationEnd = Date.now() + duration;
+  const defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 9999 };
+
+  const randomInRange = (min: number, max: number) => Math.random() * (max - min) + min;
+
+  const interval = window.setInterval(() => {
+    const timeLeft = animationEnd - Date.now();
+
+    if (timeLeft <= 0) {
+      return clearInterval(interval);
+    }
+
+    const particleCount = 50 * (timeLeft / duration);
+
+    confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 },
+      colors: ['#22c55e', '#16a34a', '#4ade80', '#86efac', '#fbbf24', '#f59e0b'],
+    });
+    confetti({
+      ...defaults,
+      particleCount,
+      origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 },
+      colors: ['#22c55e', '#16a34a', '#4ade80', '#86efac', '#fbbf24', '#f59e0b'],
+    });
+  }, 250);
+};
+
 const Support = () => {
   const [copied, setCopied] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [donations, setDonations] = useState<Donation[]>([]);
   const [topSupporters, setTopSupporters] = useState<TopSupporter[]>([]);
+  const [totalRaised, setTotalRaised] = useState(0);
   const [showDonationForm, setShowDonationForm] = useState(false);
   const [donationName, setDonationName] = useState("");
   const [donationEmail, setDonationEmail] = useState("");
@@ -71,12 +113,12 @@ const Support = () => {
   
   const pixKey = "66e61cc3-0bf0-4964-a20e-d9e5ebeb810b";
 
-  useEffect(() => {
-    fetchDonations();
-    fetchTopSupporters();
-  }, []);
+  const currentGoal = FUNDRAISING_GOALS.find(g => totalRaised < g.target) || FUNDRAISING_GOALS[FUNDRAISING_GOALS.length - 1];
+  const previousGoal = FUNDRAISING_GOALS[FUNDRAISING_GOALS.findIndex(g => g.target === currentGoal.target) - 1];
+  const progressBase = previousGoal?.target || 0;
+  const progressPercentage = Math.min(100, ((totalRaised - progressBase) / (currentGoal.target - progressBase)) * 100);
 
-  const fetchDonations = async () => {
+  const fetchDonations = useCallback(async () => {
     const { data, error } = await supabase
       .from("donations")
       .select("*")
@@ -86,9 +128,20 @@ const Support = () => {
     if (!error && data) {
       setDonations(data);
     }
-  };
+  }, []);
 
-  const fetchTopSupporters = async () => {
+  const fetchTotalRaised = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("donations")
+      .select("amount");
+
+    if (!error && data) {
+      const total = data.reduce((sum, d) => sum + d.amount, 0);
+      setTotalRaised(total);
+    }
+  }, []);
+
+  const fetchTopSupporters = useCallback(async () => {
     const { data, error } = await supabase
       .from("donations")
       .select("name, amount")
@@ -108,7 +161,54 @@ const Support = () => {
 
       setTopSupporters(sorted);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchDonations();
+    fetchTopSupporters();
+    fetchTotalRaised();
+
+    // Subscribe to realtime donations
+    const channel = supabase
+      .channel('donations-realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'donations',
+        },
+        (payload) => {
+          console.log('New donation received:', payload);
+          const newDonation = payload.new as Donation;
+          
+          // Show toast notification
+          toast.success(
+            <div className="flex items-center gap-2">
+              <Bell className="w-4 h-4 text-primary" />
+              <span>
+                <strong>{newDonation.name}</strong> acabou de doar{" "}
+                <strong>R$ {newDonation.amount.toFixed(2)}</strong>! 🎉
+              </span>
+            </div>,
+            { duration: 5000 }
+          );
+
+          // Fire confetti for any new donation
+          fireConfetti();
+
+          // Update state
+          setDonations((prev) => [newDonation, ...prev.slice(0, 19)]);
+          setTotalRaised((prev) => prev + newDonation.amount);
+          fetchTopSupporters();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchDonations, fetchTopSupporters, fetchTotalRaised]);
 
   const generatePixPayload = (amount?: number) => {
     return pixKey;
@@ -142,6 +242,9 @@ const Support = () => {
     if (error) {
       toast.error("Erro ao registrar doação");
     } else {
+      // Fire confetti!
+      fireConfetti();
+      
       toast.success("Obrigado pela sua doação! 💚");
       
       // Send thank you email if email provided
@@ -164,8 +267,6 @@ const Support = () => {
       setDonationAmount("");
       setDonationMessage("");
       setShowDonationForm(false);
-      fetchDonations();
-      fetchTopSupporters();
     }
     setIsSubmitting(false);
   };
@@ -190,11 +291,83 @@ const Support = () => {
           </div>
         </div>
 
+        {/* Fundraising Goal */}
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-8"
+        >
+          <Card className="border-primary/20 bg-gradient-to-r from-primary/10 via-background to-primary/10 overflow-hidden">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="flex items-center gap-2">
+                  <Target className="w-6 h-6 text-primary" />
+                  <CardTitle className="font-display text-xl">Meta de Arrecadação</CardTitle>
+                </div>
+                <div className="text-right">
+                  <p className="text-2xl font-bold text-primary">
+                    R$ {totalRaised.toFixed(2)}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    de R$ {currentGoal.target.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground">{currentGoal.icon} {currentGoal.label}</span>
+                  <span className="font-medium text-foreground">{progressPercentage.toFixed(0)}%</span>
+                </div>
+                <motion.div
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 1, ease: "easeOut" }}
+                  style={{ originX: 0 }}
+                >
+                  <Progress value={progressPercentage} className="h-4" />
+                </motion.div>
+                <p className="text-xs text-muted-foreground">{currentGoal.description}</p>
+              </div>
+
+              {/* Goal milestones */}
+              <div className="flex flex-wrap gap-2 pt-2">
+                {FUNDRAISING_GOALS.map((goal, index) => {
+                  const isCompleted = totalRaised >= goal.target;
+                  const isCurrent = goal.target === currentGoal.target;
+                  
+                  return (
+                    <motion.div
+                      key={goal.target}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ delay: index * 0.1 }}
+                      className={`px-3 py-1.5 rounded-full text-xs font-medium flex items-center gap-1 ${
+                        isCompleted 
+                          ? 'bg-primary/20 text-primary' 
+                          : isCurrent 
+                            ? 'bg-yellow-400/20 text-yellow-400 animate-pulse' 
+                            : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      <span>{goal.icon}</span>
+                      <span>R$ {goal.target}</span>
+                      {isCompleted && <Check className="w-3 h-3" />}
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+
         {/* Top Supporters Ranking */}
         {topSupporters.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
             className="mb-8"
           >
             <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-primary/5 overflow-hidden">
@@ -501,7 +674,7 @@ const Support = () => {
                         onClick={handleSubmitDonation}
                         disabled={isSubmitting}
                       >
-                        {isSubmitting ? "Registrando..." : "Registrar Doação"}
+                        {isSubmitting ? "Registrando..." : "Registrar Doação 🎉"}
                       </Button>
                     </CardContent>
                   </Card>
@@ -537,9 +710,16 @@ const Support = () => {
               <h2 className="font-display text-xl font-bold text-foreground">
                 Mural de Apoiadores
               </h2>
+              <motion.div
+                animate={{ scale: [1, 1.2, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="ml-auto"
+              >
+                <Bell className="w-4 h-4 text-primary" />
+              </motion.div>
             </div>
             <p className="text-sm text-muted-foreground">
-              Nossos heróis que tornaram isso possível
+              Nossos heróis que tornaram isso possível • Atualizações em tempo real
             </p>
 
             <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
@@ -561,6 +741,7 @@ const Support = () => {
                       initial={{ opacity: 0, x: 20 }}
                       animate={{ opacity: 1, x: 0 }}
                       transition={{ duration: 0.3, delay: index * 0.05 }}
+                      layout
                     >
                       <Card className="border-primary/10 hover:border-primary/30 transition-colors">
                         <CardContent className="p-4">
