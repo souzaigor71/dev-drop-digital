@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Heart, Copy, Check, ArrowLeft, Users, Sparkles } from "lucide-react";
+import { Heart, Copy, Check, ArrowLeft, Users, Sparkles, Trophy, Crown, Star, Medal, Award } from "lucide-react";
 import { Link } from "react-router-dom";
 import { QRCodeSVG } from "qrcode.react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -28,12 +28,42 @@ interface Donation {
   created_at: string;
 }
 
+interface TopSupporter {
+  name: string;
+  total: number;
+  rank: number;
+}
+
+const getBadgeForRank = (rank: number) => {
+  switch (rank) {
+    case 1:
+      return { icon: Crown, color: "text-yellow-400", bg: "bg-yellow-400/20", label: "👑 Lendário" };
+    case 2:
+      return { icon: Medal, color: "text-gray-300", bg: "bg-gray-300/20", label: "🥈 Épico" };
+    case 3:
+      return { icon: Award, color: "text-amber-600", bg: "bg-amber-600/20", label: "🥉 Raro" };
+    default:
+      return { icon: Star, color: "text-primary", bg: "bg-primary/20", label: "⭐ Apoiador" };
+  }
+};
+
+const getBadgeForAmount = (amount: number) => {
+  if (amount >= 500) return { label: "💎 Diamante", color: "text-cyan-400", bg: "bg-cyan-400/20" };
+  if (amount >= 200) return { label: "🔮 Platina", color: "text-purple-400", bg: "bg-purple-400/20" };
+  if (amount >= 100) return { label: "🏆 Ouro", color: "text-yellow-400", bg: "bg-yellow-400/20" };
+  if (amount >= 50) return { label: "🥈 Prata", color: "text-gray-300", bg: "bg-gray-300/20" };
+  if (amount >= 25) return { label: "🥉 Bronze", color: "text-amber-600", bg: "bg-amber-600/20" };
+  return { label: "💚 Apoiador", color: "text-primary", bg: "bg-primary/20" };
+};
+
 const Support = () => {
   const [copied, setCopied] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [topSupporters, setTopSupporters] = useState<TopSupporter[]>([]);
   const [showDonationForm, setShowDonationForm] = useState(false);
   const [donationName, setDonationName] = useState("");
+  const [donationEmail, setDonationEmail] = useState("");
   const [donationAmount, setDonationAmount] = useState("");
   const [donationMessage, setDonationMessage] = useState("");
   const [isPublic, setIsPublic] = useState(true);
@@ -43,6 +73,7 @@ const Support = () => {
 
   useEffect(() => {
     fetchDonations();
+    fetchTopSupporters();
   }, []);
 
   const fetchDonations = async () => {
@@ -54,6 +85,28 @@ const Support = () => {
 
     if (!error && data) {
       setDonations(data);
+    }
+  };
+
+  const fetchTopSupporters = async () => {
+    const { data, error } = await supabase
+      .from("donations")
+      .select("name, amount")
+      .eq("is_public", true);
+
+    if (!error && data) {
+      const totals = data.reduce((acc, donation) => {
+        acc[donation.name] = (acc[donation.name] || 0) + donation.amount;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const sorted = Object.entries(totals)
+        .map(([name, total]) => ({ name, total }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 5)
+        .map((s, i) => ({ ...s, rank: i + 1 }));
+
+      setTopSupporters(sorted);
     }
   };
 
@@ -90,11 +143,29 @@ const Support = () => {
       toast.error("Erro ao registrar doação");
     } else {
       toast.success("Obrigado pela sua doação! 💚");
+      
+      // Send thank you email if email provided
+      if (donationEmail.trim()) {
+        try {
+          await supabase.functions.invoke("send-donation-thanks", {
+            body: {
+              name: donationName.trim(),
+              email: donationEmail.trim(),
+              amount: parseFloat(donationAmount),
+            },
+          });
+        } catch (emailError) {
+          console.error("Error sending thank you email:", emailError);
+        }
+      }
+      
       setDonationName("");
+      setDonationEmail("");
       setDonationAmount("");
       setDonationMessage("");
       setShowDonationForm(false);
       fetchDonations();
+      fetchTopSupporters();
     }
     setIsSubmitting(false);
   };
@@ -118,6 +189,77 @@ const Support = () => {
             </p>
           </div>
         </div>
+
+        {/* Top Supporters Ranking */}
+        {topSupporters.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-8"
+          >
+            <Card className="border-primary/20 bg-gradient-to-r from-primary/5 via-background to-primary/5 overflow-hidden">
+              <CardHeader className="pb-4">
+                <div className="flex items-center gap-2">
+                  <Trophy className="w-6 h-6 text-yellow-400" />
+                  <CardTitle className="font-display text-xl">Top Apoiadores</CardTitle>
+                </div>
+                <CardDescription>Os heróis que mais contribuíram</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-4 justify-center md:justify-start">
+                  {topSupporters.map((supporter, index) => {
+                    const badge = getBadgeForRank(supporter.rank);
+                    const amountBadge = getBadgeForAmount(supporter.total);
+                    const BadgeIcon = badge.icon;
+                    
+                    return (
+                      <motion.div
+                        key={supporter.name}
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        transition={{ delay: index * 0.1 }}
+                        whileHover={{ scale: 1.05, y: -5 }}
+                        className="relative"
+                      >
+                        <Card className={`${badge.bg} border-2 ${supporter.rank === 1 ? 'border-yellow-400/50' : supporter.rank === 2 ? 'border-gray-300/50' : supporter.rank === 3 ? 'border-amber-600/50' : 'border-primary/30'} min-w-[140px]`}>
+                          <CardContent className="p-4 text-center">
+                            <motion.div
+                              animate={supporter.rank === 1 ? { rotate: [0, 5, -5, 0] } : {}}
+                              transition={{ duration: 2, repeat: Infinity }}
+                            >
+                              <BadgeIcon className={`w-8 h-8 ${badge.color} mx-auto mb-2`} />
+                            </motion.div>
+                            <p className="font-display font-bold text-foreground truncate max-w-[120px]">
+                              {supporter.name}
+                            </p>
+                            <p className={`text-xs font-medium ${badge.color} mb-1`}>
+                              {badge.label}
+                            </p>
+                            <div className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${amountBadge.bg} ${amountBadge.color}`}>
+                              {amountBadge.label}
+                            </div>
+                            <p className="text-lg font-bold text-primary mt-2">
+                              R$ {supporter.total.toFixed(0)}
+                            </p>
+                          </CardContent>
+                        </Card>
+                        {supporter.rank <= 3 && (
+                          <motion.div
+                            className="absolute -top-2 -right-2 text-2xl"
+                            animate={{ scale: [1, 1.2, 1] }}
+                            transition={{ duration: 1.5, repeat: Infinity }}
+                          >
+                            {supporter.rank === 1 ? "👑" : supporter.rank === 2 ? "🥈" : "🥉"}
+                          </motion.div>
+                        )}
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         <div className="grid lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
           {/* QR Code Section */}
@@ -303,7 +445,7 @@ const Support = () => {
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Seu nome</Label>
+                        <Label htmlFor="name">Seu nome *</Label>
                         <Input
                           id="name"
                           placeholder="Como quer ser chamado?"
@@ -313,7 +455,17 @@ const Support = () => {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="amount">Valor doado (R$)</Label>
+                        <Label htmlFor="email">Seu email (para agradecimento)</Label>
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="seu@email.com"
+                          value={donationEmail}
+                          onChange={(e) => setDonationEmail(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="amount">Valor doado (R$) *</Label>
                         <Input
                           id="amount"
                           type="number"
@@ -401,39 +553,47 @@ const Support = () => {
                   </CardContent>
                 </Card>
               ) : (
-                donations.map((donation, index) => (
-                  <motion.div
-                    key={donation.id}
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ duration: 0.3, delay: index * 0.05 }}
-                  >
-                    <Card className="border-primary/10 hover:border-primary/30 transition-colors">
-                      <CardContent className="p-4">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="font-display font-bold text-foreground truncate">
-                              {donation.name}
-                            </p>
-                            {donation.message && (
-                              <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                                "{donation.message}"
+                donations.map((donation, index) => {
+                  const amountBadge = getBadgeForAmount(donation.amount);
+                  return (
+                    <motion.div
+                      key={donation.id}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ duration: 0.3, delay: index * 0.05 }}
+                    >
+                      <Card className="border-primary/10 hover:border-primary/30 transition-colors">
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <p className="font-display font-bold text-foreground truncate">
+                                  {donation.name}
+                                </p>
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${amountBadge.bg} ${amountBadge.color}`}>
+                                  {amountBadge.label}
+                                </span>
+                              </div>
+                              {donation.message && (
+                                <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                                  "{donation.message}"
+                                </p>
+                              )}
+                              <p className="text-xs text-muted-foreground mt-2">
+                                {new Date(donation.created_at).toLocaleDateString("pt-BR")}
                               </p>
-                            )}
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {new Date(donation.created_at).toLocaleDateString("pt-BR")}
-                            </p>
+                            </div>
+                            <div className="bg-primary/10 px-3 py-1 rounded-full shrink-0">
+                              <p className="text-sm font-bold text-primary">
+                                R$ {donation.amount.toFixed(2)}
+                              </p>
+                            </div>
                           </div>
-                          <div className="bg-primary/10 px-3 py-1 rounded-full shrink-0">
-                            <p className="text-sm font-bold text-primary">
-                              R$ {donation.amount.toFixed(2)}
-                            </p>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })
               )}
             </div>
           </motion.div>
