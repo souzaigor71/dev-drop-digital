@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Play, Image as ImageIcon, X, Loader2, Gamepad2 } from "lucide-react";
+import { Play, Image as ImageIcon, X, Loader2, Gamepad2, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 
 interface Game {
   id: string;
@@ -26,6 +27,8 @@ const GallerySection = () => {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [availableProjects, setAvailableProjects] = useState<Game[]>([]);
 
   useEffect(() => {
     const fetchGallery = async () => {
@@ -36,6 +39,15 @@ const GallerySection = () => {
 
       if (!error && data) {
         setMediaItems(data as MediaItem[]);
+        
+        // Extract unique projects
+        const projects = data
+          .filter(item => item.games)
+          .map(item => item.games as Game)
+          .filter((game, index, self) => 
+            self.findIndex(g => g.id === game.id) === index
+          );
+        setAvailableProjects(projects);
       }
       setLoading(false);
     };
@@ -43,8 +55,12 @@ const GallerySection = () => {
     fetchGallery();
   }, []);
 
-  const groupedMedia = mediaItems.reduce<GroupedMedia[]>((acc, item) => {
-    const gameId = item.game_id || 'no-project';
+  // Filter items based on selected project
+  const filteredItems = selectedProject
+    ? mediaItems.filter(item => item.game_id === selectedProject)
+    : mediaItems;
+
+  const groupedMedia = filteredItems.reduce<GroupedMedia[]>((acc, item) => {
     const existingGroup = acc.find(g => 
       (g.game?.id === item.game_id) || (!g.game && !item.game_id)
     );
@@ -107,6 +123,33 @@ const GallerySection = () => {
             Acompanhe o progresso dos meus jogos através de fotos e vídeos exclusivos do desenvolvimento
           </p>
         </div>
+
+        {/* Project Filter */}
+        {availableProjects.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <Button
+              variant={selectedProject === null ? "gaming" : "outline"}
+              size="sm"
+              onClick={() => setSelectedProject(null)}
+              className="rounded-full"
+            >
+              Todos
+            </Button>
+            {availableProjects.map((project) => (
+              <Button
+                key={project.id}
+                variant={selectedProject === project.id ? "gaming" : "outline"}
+                size="sm"
+                onClick={() => setSelectedProject(project.id)}
+                className="rounded-full"
+              >
+                <Gamepad2 className="w-3 h-3 mr-1" />
+                {project.title}
+              </Button>
+            ))}
+          </div>
+        )}
 
         <div className="space-y-12">
           {sortedGroups.map((group, groupIndex) => (
@@ -171,6 +214,20 @@ const GallerySection = () => {
             </div>
           ))}
         </div>
+
+        {filteredItems.length === 0 && selectedProject && (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">Nenhum item encontrado para este projeto.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedProject(null)}
+              className="mt-4"
+            >
+              Ver todos
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Modal */}
