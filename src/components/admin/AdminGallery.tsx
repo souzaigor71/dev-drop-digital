@@ -20,6 +20,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 
+interface Game {
+  id: string;
+  title: string;
+}
+
 interface GalleryItem {
   id: string;
   title: string;
@@ -27,10 +32,13 @@ interface GalleryItem {
   url: string;
   thumbnail_url: string | null;
   created_at: string;
+  game_id: string | null;
+  games?: Game | null;
 }
 
 const AdminGallery = () => {
   const [items, setItems] = useState<GalleryItem[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
@@ -43,12 +51,13 @@ const AdminGallery = () => {
     type: 'image' as 'image' | 'video',
     url: '',
     thumbnail_url: '',
+    game_id: '' as string,
   });
 
   const fetchItems = async () => {
     const { data, error } = await supabase
       .from('gallery')
-      .select('*')
+      .select('*, games(id, title)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -59,8 +68,17 @@ const AdminGallery = () => {
     setLoading(false);
   };
 
+  const fetchGames = async () => {
+    const { data } = await supabase
+      .from('games')
+      .select('id, title')
+      .order('title');
+    if (data) setGames(data);
+  };
+
   useEffect(() => {
     fetchItems();
+    fetchGames();
   }, []);
 
   const resetForm = () => {
@@ -69,6 +87,7 @@ const AdminGallery = () => {
       type: 'image',
       url: '',
       thumbnail_url: '',
+      game_id: '',
     });
     setEditingItem(null);
   };
@@ -80,6 +99,7 @@ const AdminGallery = () => {
       type: item.type as 'image' | 'video',
       url: item.url,
       thumbnail_url: item.thumbnail_url || '',
+      game_id: item.game_id || '',
     });
     setIsDialogOpen(true);
   };
@@ -143,6 +163,7 @@ const AdminGallery = () => {
       type: formData.type,
       url: formData.url,
       thumbnail_url: formData.thumbnail_url || formData.url,
+      game_id: formData.game_id || null,
     };
 
     if (editingItem) {
@@ -258,6 +279,26 @@ const AdminGallery = () => {
               </div>
 
               <div className="space-y-2">
+                <Label>Projeto (opcional)</Label>
+                <Select
+                  value={formData.game_id}
+                  onValueChange={(value) => setFormData({ ...formData, game_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um projeto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum projeto</SelectItem>
+                    {games.map((game) => (
+                      <SelectItem key={game.id} value={game.id}>
+                        {game.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <Label>Arquivo {formData.type === 'video' ? '(Vídeo)' : '(Imagem)'}</Label>
                 <div className="flex items-center gap-4">
                   <Button type="button" variant="outline" className="relative" disabled={uploading}>
@@ -365,6 +406,9 @@ const AdminGallery = () => {
               </div>
               <div className="p-2">
                 <p className="text-sm font-body truncate">{item.title}</p>
+                {item.games && (
+                  <p className="text-xs text-primary truncate">{item.games.title}</p>
+                )}
               </div>
             </div>
           ))}

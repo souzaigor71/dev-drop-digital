@@ -91,6 +91,7 @@ export type Database = {
       gallery: {
         Row: {
           created_at: string | null
+          game_id: string | null
           id: string
           thumbnail_url: string | null
           title: string
@@ -99,6 +100,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          game_id?: string | null
           id?: string
           thumbnail_url?: string | null
           title: string
@@ -107,13 +109,22 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          game_id?: string | null
           id?: string
           thumbnail_url?: string | null
           title?: string
           type?: string
           url?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "gallery_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       games: {
         Row: {
@@ -167,6 +178,7 @@ export type Database = {
         Row: {
           content: string
           created_at: string
+          game_id: string | null
           id: string
           thumbnail_url: string | null
           title: string
@@ -175,6 +187,7 @@ export type Database = {
         Insert: {
           content: string
           created_at?: string
+          game_id?: string | null
           id?: string
           thumbnail_url?: string | null
           title: string
@@ -183,12 +196,21 @@ export type Database = {
         Update: {
           content?: string
           created_at?: string
+          game_id?: string | null
           id?: string
           thumbnail_url?: string | null
           title?: string
           updated_at?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "posts_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
