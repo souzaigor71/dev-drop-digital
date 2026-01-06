@@ -1,6 +1,11 @@
 import { useState, useEffect } from "react";
-import { Loader2, Calendar, FileText } from "lucide-react";
+import { Loader2, Calendar, FileText, Gamepad2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+
+interface Game {
+  id: string;
+  title: string;
+}
 
 interface Post {
   id: string;
@@ -8,6 +13,13 @@ interface Post {
   content: string;
   thumbnail_url: string | null;
   created_at: string;
+  game_id: string | null;
+  games?: Game | null;
+}
+
+interface GroupedPosts {
+  game: Game | null;
+  posts: Post[];
 }
 
 const PublicationsSection = () => {
@@ -18,7 +30,7 @@ const PublicationsSection = () => {
     const fetchPosts = async () => {
       const { data, error } = await supabase
         .from('posts')
-        .select('*')
+        .select('*, games(id, title)')
         .order('created_at', { ascending: false });
 
       if (!error && data) {
@@ -66,6 +78,29 @@ const PublicationsSection = () => {
     });
   };
 
+  const groupedPosts = posts.reduce<GroupedPosts[]>((acc, post) => {
+    const existingGroup = acc.find(g => 
+      (g.game?.id === post.game_id) || (!g.game && !post.game_id)
+    );
+    
+    if (existingGroup) {
+      existingGroup.posts.push(post);
+    } else {
+      acc.push({
+        game: post.games || null,
+        posts: [post]
+      });
+    }
+    return acc;
+  }, []);
+
+  // Sort: projects with games first, then "Outros" (no project)
+  const sortedGroups = groupedPosts.sort((a, b) => {
+    if (a.game && !b.game) return -1;
+    if (!a.game && b.game) return 1;
+    return (a.game?.title || '').localeCompare(b.game?.title || '');
+  });
+
   if (loading) {
     return (
       <section id="publications" className="py-24 relative">
@@ -110,42 +145,58 @@ const PublicationsSection = () => {
           </p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {posts.map((post, index) => (
-            <article
-              key={post.id}
-              className="group bg-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all duration-300 animate-fade-in flex flex-col"
-              style={{ animationDelay: `${index * 0.1}s` }}
-            >
-              {post.thumbnail_url ? (
-                <div className="h-48 overflow-hidden">
-                  <img
-                    src={post.thumbnail_url}
-                    alt={post.title}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
-                  />
-                </div>
-              ) : (
-                <div className="h-48 bg-secondary flex items-center justify-center">
-                  <FileText className="w-12 h-12 text-muted-foreground" />
-                </div>
-              )}
-
-              <div className="p-5 flex flex-col flex-1">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
-                  <Calendar className="w-3 h-3" />
-                  <span>{formatDate(post.created_at)}</span>
-                </div>
-
-                <h3 className="font-display text-lg font-bold text-foreground mb-3 group-hover:text-primary transition-colors">
-                  {post.title}
+        <div className="space-y-12">
+          {sortedGroups.map((group, groupIndex) => (
+            <div key={group.game?.id || 'no-project'} className="animate-fade-in" style={{ animationDelay: `${groupIndex * 0.1}s` }}>
+              <div className="flex items-center gap-3 mb-6">
+                <Gamepad2 className="w-6 h-6 text-primary" />
+                <h3 className="font-display text-2xl font-bold text-foreground">
+                  {group.game?.title || 'Outros'}
                 </h3>
-
-                <p className="font-body text-sm text-muted-foreground flex-1">
-                  {renderContentWithLinks(truncateContent(post.content))}
-                </p>
+                <span className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
+                  {group.posts.length} {group.posts.length === 1 ? 'publicação' : 'publicações'}
+                </span>
               </div>
-            </article>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {group.posts.map((post, index) => (
+                  <article
+                    key={post.id}
+                    className="group bg-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all duration-300 animate-fade-in flex flex-col"
+                    style={{ animationDelay: `${(groupIndex * 0.1) + (index * 0.05)}s` }}
+                  >
+                    {post.thumbnail_url ? (
+                      <div className="h-48 overflow-hidden">
+                        <img
+                          src={post.thumbnail_url}
+                          alt={post.title}
+                          className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-48 bg-secondary flex items-center justify-center">
+                        <FileText className="w-12 h-12 text-muted-foreground" />
+                      </div>
+                    )}
+
+                    <div className="p-5 flex flex-col flex-1">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3">
+                        <Calendar className="w-3 h-3" />
+                        <span>{formatDate(post.created_at)}</span>
+                      </div>
+
+                      <h3 className="font-display text-lg font-bold text-foreground mb-3 group-hover:text-primary transition-colors">
+                        {post.title}
+                      </h3>
+
+                      <p className="font-body text-sm text-muted-foreground flex-1">
+                        {renderContentWithLinks(truncateContent(post.content))}
+                      </p>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       </div>

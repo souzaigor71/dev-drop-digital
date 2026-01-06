@@ -12,8 +12,20 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import { Plus, Pencil, Trash2, Loader2, FileText, ImageIcon } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, FileText, ImageIcon, Gamepad2 } from 'lucide-react';
 import { toast } from 'sonner';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+
+interface Game {
+  id: string;
+  title: string;
+}
 
 interface Post {
   id: string;
@@ -22,10 +34,13 @@ interface Post {
   thumbnail_url: string | null;
   created_at: string;
   updated_at: string;
+  game_id: string | null;
+  games?: Game | null;
 }
 
 const AdminPosts = () => {
   const [posts, setPosts] = useState<Post[]>([]);
+  const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
@@ -35,12 +50,13 @@ const AdminPosts = () => {
     title: '',
     content: '',
     thumbnail_url: '',
+    game_id: '' as string,
   });
 
   const fetchPosts = async () => {
     const { data, error } = await supabase
       .from('posts')
-      .select('*')
+      .select('*, games(id, title)')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -52,12 +68,21 @@ const AdminPosts = () => {
     setLoading(false);
   };
 
+  const fetchGames = async () => {
+    const { data } = await supabase
+      .from('games')
+      .select('id, title')
+      .order('title');
+    if (data) setGames(data);
+  };
+
   useEffect(() => {
     fetchPosts();
+    fetchGames();
   }, []);
 
   const resetForm = () => {
-    setFormData({ title: '', content: '', thumbnail_url: '' });
+    setFormData({ title: '', content: '', thumbnail_url: '', game_id: '' });
     setEditingPost(null);
   };
 
@@ -67,6 +92,7 @@ const AdminPosts = () => {
       title: post.title,
       content: post.content,
       thumbnail_url: post.thumbnail_url || '',
+      game_id: post.game_id || '',
     });
     setIsDialogOpen(true);
   };
@@ -108,6 +134,7 @@ const AdminPosts = () => {
       title: formData.title,
       content: formData.content,
       thumbnail_url: formData.thumbnail_url || null,
+      game_id: formData.game_id || null,
     };
 
     if (editingPost) {
@@ -232,6 +259,26 @@ const AdminPosts = () => {
                 )}
               </div>
 
+              <div className="space-y-2">
+                <Label>Projeto (opcional)</Label>
+                <Select
+                  value={formData.game_id}
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, game_id: value }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione um projeto" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum projeto</SelectItem>
+                    {games.map((game) => (
+                      <SelectItem key={game.id} value={game.id}>
+                        {game.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="flex gap-2 pt-4">
                 <Button
                   type="button"
@@ -286,9 +333,17 @@ const AdminPosts = () => {
                     <p className="font-body text-sm text-muted-foreground line-clamp-2 mt-1">
                       {post.content}
                     </p>
-                    <p className="font-body text-xs text-muted-foreground mt-2">
-                      {new Date(post.created_at).toLocaleDateString('pt-BR')}
-                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <p className="font-body text-xs text-muted-foreground">
+                        {new Date(post.created_at).toLocaleDateString('pt-BR')}
+                      </p>
+                      {post.games && (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary rounded text-xs">
+                          <Gamepad2 className="w-3 h-3" />
+                          {post.games.title}
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-2 flex-shrink-0">
                     <Button
