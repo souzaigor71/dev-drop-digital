@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Loader2, Calendar, FileText, Gamepad2 } from "lucide-react";
+import { Loader2, Calendar, FileText, Gamepad2, Filter } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
 
 interface Game {
   id: string;
@@ -25,6 +26,8 @@ interface GroupedPosts {
 const PublicationsSection = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedProject, setSelectedProject] = useState<string | null>(null);
+  const [availableProjects, setAvailableProjects] = useState<Game[]>([]);
 
   useEffect(() => {
     const fetchPosts = async () => {
@@ -35,6 +38,15 @@ const PublicationsSection = () => {
 
       if (!error && data) {
         setPosts(data);
+        
+        // Extract unique projects
+        const projects = data
+          .filter(post => post.games)
+          .map(post => post.games as Game)
+          .filter((game, index, self) => 
+            self.findIndex(g => g.id === game.id) === index
+          );
+        setAvailableProjects(projects);
       }
       setLoading(false);
     };
@@ -78,7 +90,12 @@ const PublicationsSection = () => {
     });
   };
 
-  const groupedPosts = posts.reduce<GroupedPosts[]>((acc, post) => {
+  // Filter posts based on selected project
+  const filteredPosts = selectedProject
+    ? posts.filter(post => post.game_id === selectedProject)
+    : posts;
+
+  const groupedPosts = filteredPosts.reduce<GroupedPosts[]>((acc, post) => {
     const existingGroup = acc.find(g => 
       (g.game?.id === post.game_id) || (!g.game && !post.game_id)
     );
@@ -145,6 +162,33 @@ const PublicationsSection = () => {
           </p>
         </div>
 
+        {/* Project Filter */}
+        {availableProjects.length > 0 && (
+          <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
+            <Filter className="w-4 h-4 text-muted-foreground" />
+            <Button
+              variant={selectedProject === null ? "gaming" : "outline"}
+              size="sm"
+              onClick={() => setSelectedProject(null)}
+              className="rounded-full"
+            >
+              Todos
+            </Button>
+            {availableProjects.map((project) => (
+              <Button
+                key={project.id}
+                variant={selectedProject === project.id ? "gaming" : "outline"}
+                size="sm"
+                onClick={() => setSelectedProject(project.id)}
+                className="rounded-full"
+              >
+                <Gamepad2 className="w-3 h-3 mr-1" />
+                {project.title}
+              </Button>
+            ))}
+          </div>
+        )}
+
         <div className="space-y-12">
           {sortedGroups.map((group, groupIndex) => (
             <div key={group.game?.id || 'no-project'} className="animate-fade-in" style={{ animationDelay: `${groupIndex * 0.1}s` }}>
@@ -199,6 +243,20 @@ const PublicationsSection = () => {
             </div>
           ))}
         </div>
+
+        {filteredPosts.length === 0 && selectedProject && (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground">Nenhuma publicação encontrada para este projeto.</p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setSelectedProject(null)}
+              className="mt-4"
+            >
+              Ver todas
+            </Button>
+          </div>
+        )}
       </div>
     </section>
   );
