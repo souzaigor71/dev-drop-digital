@@ -51,7 +51,7 @@ const AdminGallery = () => {
     type: 'image' as 'image' | 'video',
     url: '',
     thumbnail_url: '',
-    game_id: '' as string,
+    game_id: 'none' as string,
   });
 
   const fetchItems = async () => {
@@ -87,7 +87,7 @@ const AdminGallery = () => {
       type: 'image',
       url: '',
       thumbnail_url: '',
-      game_id: '',
+      game_id: 'none',
     });
     setEditingItem(null);
   };
@@ -99,7 +99,7 @@ const AdminGallery = () => {
       type: item.type as 'image' | 'video',
       url: item.url,
       thumbnail_url: item.thumbnail_url || '',
-      game_id: item.game_id || '',
+      game_id: item.game_id || 'none',
     });
     setIsDialogOpen(true);
   };
@@ -163,7 +163,7 @@ const AdminGallery = () => {
       type: formData.type,
       url: formData.url,
       thumbnail_url: formData.thumbnail_url || formData.url,
-      game_id: formData.game_id || null,
+      game_id: formData.game_id === 'none' ? null : formData.game_id,
     };
 
     if (editingItem) {
@@ -263,7 +263,7 @@ const AdminGallery = () => {
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-card border-border z-50">
                     <SelectItem value="image">
                       <div className="flex items-center gap-2">
                         <Image className="w-4 h-4" /> Imagem
@@ -287,8 +287,8 @@ const AdminGallery = () => {
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione um projeto" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum projeto</SelectItem>
+                  <SelectContent className="bg-card border-border z-50">
+                    <SelectItem value="none">Nenhum projeto</SelectItem>
                     {games.map((game) => (
                       <SelectItem key={game.id} value={game.id}>
                         {game.title}
