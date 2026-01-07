@@ -15,12 +15,14 @@ interface MediaItem {
   url: string;
   thumbnail_url: string | null;
   game_id: string | null;
+  created_at: string | null;
   games?: Game | null;
 }
 
 interface ProjectFolder {
   game: Game | null;
   items: MediaItem[];
+  latestDate: string | null;
 }
 
 const GallerySection = () => {
@@ -46,26 +48,36 @@ const GallerySection = () => {
   }, []);
 
   const folders = mediaItems.reduce<ProjectFolder[]>((acc, item) => {
-    const folderId = item.game_id || 'others';
     const existingFolder = acc.find(f => 
       (f.game?.id === item.game_id) || (!f.game && !item.game_id)
     );
     
     if (existingFolder) {
       existingFolder.items.push(item);
+      // Update latest date if this item is newer
+      if (item.created_at && (!existingFolder.latestDate || item.created_at > existingFolder.latestDate)) {
+        existingFolder.latestDate = item.created_at;
+      }
     } else {
       acc.push({
         game: item.games || null,
-        items: [item]
+        items: [item],
+        latestDate: item.created_at
       });
     }
     return acc;
   }, []);
 
+  // Sort folders by latest date (most recent first), with "Outros" always at the end
   const sortedFolders = folders.sort((a, b) => {
+    // "Outros" (no game) always goes last
     if (a.game && !b.game) return -1;
     if (!a.game && b.game) return 1;
-    return (a.game?.title || '').localeCompare(b.game?.title || '');
+    
+    // Sort by latest date (most recent first)
+    const dateA = a.latestDate || '';
+    const dateB = b.latestDate || '';
+    return dateB.localeCompare(dateA);
   });
 
   const toggleFolder = (folderId: string) => {
