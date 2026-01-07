@@ -1,11 +1,11 @@
 import { useState, useEffect } from "react";
-import { Play, Image as ImageIcon, X, Loader2, Gamepad2, Filter } from "lucide-react";
+import { Play, Image as ImageIcon, X, Loader2, Folder, FolderOpen, ChevronRight } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { Button } from "@/components/ui/button";
 
 interface Game {
   id: string;
   title: string;
+  thumbnail_url?: string | null;
 }
 
 interface MediaItem {
@@ -18,7 +18,7 @@ interface MediaItem {
   games?: Game | null;
 }
 
-interface GroupedMedia {
+interface ProjectFolder {
   game: Game | null;
   items: MediaItem[];
 }
@@ -27,27 +27,17 @@ const GallerySection = () => {
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [selectedMedia, setSelectedMedia] = useState<MediaItem | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedProject, setSelectedProject] = useState<string | null>(null);
-  const [availableProjects, setAvailableProjects] = useState<Game[]>([]);
+  const [openFolder, setOpenFolder] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchGallery = async () => {
       const { data, error } = await supabase
         .from('gallery')
-        .select('*, games(id, title)')
+        .select('*, games(id, title, thumbnail_url)')
         .order('created_at', { ascending: false });
 
       if (!error && data) {
         setMediaItems(data as MediaItem[]);
-        
-        // Extract unique projects
-        const projects = data
-          .filter(item => item.games)
-          .map(item => item.games as Game)
-          .filter((game, index, self) => 
-            self.findIndex(g => g.id === game.id) === index
-          );
-        setAvailableProjects(projects);
       }
       setLoading(false);
     };
@@ -55,18 +45,14 @@ const GallerySection = () => {
     fetchGallery();
   }, []);
 
-  // Filter items based on selected project
-  const filteredItems = selectedProject
-    ? mediaItems.filter(item => item.game_id === selectedProject)
-    : mediaItems;
-
-  const groupedMedia = filteredItems.reduce<GroupedMedia[]>((acc, item) => {
-    const existingGroup = acc.find(g => 
-      (g.game?.id === item.game_id) || (!g.game && !item.game_id)
+  const folders = mediaItems.reduce<ProjectFolder[]>((acc, item) => {
+    const folderId = item.game_id || 'others';
+    const existingFolder = acc.find(f => 
+      (f.game?.id === item.game_id) || (!f.game && !item.game_id)
     );
     
-    if (existingGroup) {
-      existingGroup.items.push(item);
+    if (existingFolder) {
+      existingFolder.items.push(item);
     } else {
       acc.push({
         game: item.games || null,
@@ -76,12 +62,15 @@ const GallerySection = () => {
     return acc;
   }, []);
 
-  // Sort: projects with games first, then "Outros" (no project)
-  const sortedGroups = groupedMedia.sort((a, b) => {
+  const sortedFolders = folders.sort((a, b) => {
     if (a.game && !b.game) return -1;
     if (!a.game && b.game) return 1;
     return (a.game?.title || '').localeCompare(b.game?.title || '');
   });
+
+  const toggleFolder = (folderId: string) => {
+    setOpenFolder(openFolder === folderId ? null : folderId);
+  };
 
   if (loading) {
     return (
@@ -124,110 +113,126 @@ const GallerySection = () => {
           </p>
         </div>
 
-        {/* Project Filter */}
-        {availableProjects.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
-            <Filter className="w-4 h-4 text-muted-foreground" />
-            <Button
-              variant={selectedProject === null ? "gaming" : "outline"}
-              size="sm"
-              onClick={() => setSelectedProject(null)}
-              className="rounded-full"
-            >
-              Todos
-            </Button>
-            {availableProjects.map((project) => (
-              <Button
-                key={project.id}
-                variant={selectedProject === project.id ? "gaming" : "outline"}
-                size="sm"
-                onClick={() => setSelectedProject(project.id)}
-                className="rounded-full"
+        {/* Project Folders */}
+        <div className="space-y-4">
+          {sortedFolders.map((folder, folderIndex) => {
+            const folderId = folder.game?.id || 'others';
+            const isOpen = openFolder === folderId;
+            const folderThumbnail = folder.game?.thumbnail_url || folder.items[0]?.thumbnail_url || folder.items[0]?.url;
+
+            return (
+              <div 
+                key={folderId} 
+                className="animate-fade-in"
+                style={{ animationDelay: `${folderIndex * 0.1}s` }}
               >
-                <Gamepad2 className="w-3 h-3 mr-1" />
-                {project.title}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        <div className="space-y-12">
-          {sortedGroups.map((group, groupIndex) => (
-            <div key={group.game?.id || 'no-project'} className="animate-fade-in" style={{ animationDelay: `${groupIndex * 0.1}s` }}>
-              <div className="flex items-center gap-3 mb-6">
-                <Gamepad2 className="w-6 h-6 text-primary" />
-                <h3 className="font-display text-2xl font-bold text-foreground">
-                  {group.game?.title || 'Outros'}
-                </h3>
-                <span className="px-2 py-1 bg-primary/10 text-primary rounded text-sm">
-                  {group.items.length} {group.items.length === 1 ? 'item' : 'itens'}
-                </span>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {group.items.map((item, index) => (
-                  <div
-                    key={item.id}
-                    className="group relative bg-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all duration-300 cursor-pointer animate-fade-in hover:box-glow"
-                    style={{ animationDelay: `${(groupIndex * 0.1) + (index * 0.05)}s` }}
-                    onClick={() => setSelectedMedia(item)}
-                  >
-                    <div className="aspect-video relative overflow-hidden">
-                      <img
-                        src={item.thumbnail_url || item.url}
-                        alt={item.title}
-                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                {/* Folder Header */}
+                <button
+                  onClick={() => toggleFolder(folderId)}
+                  className={`w-full flex items-center gap-4 p-4 rounded-lg border transition-all duration-300 ${
+                    isOpen 
+                      ? 'bg-primary/10 border-primary' 
+                      : 'bg-card border-border hover:border-primary/50 hover:bg-card/80'
+                  }`}
+                >
+                  {/* Folder Thumbnail */}
+                  <div className="w-16 h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                    {folderThumbnail ? (
+                      <img 
+                        src={folderThumbnail} 
+                        alt={folder.game?.title || 'Outros'} 
+                        className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent" />
-                      
-                      {item.type === "video" && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-16 h-16 rounded-full bg-primary/90 flex items-center justify-center group-hover:scale-110 transition-transform box-glow">
-                            <Play className="w-7 h-7 text-primary-foreground ml-1" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        {isOpen ? (
+                          <FolderOpen className="w-8 h-8 text-primary" />
+                        ) : (
+                          <Folder className="w-8 h-8 text-muted-foreground" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Folder Info */}
+                  <div className="flex-1 text-left">
+                    <h3 className="font-display text-xl font-bold text-foreground flex items-center gap-2">
+                      {isOpen ? (
+                        <FolderOpen className="w-5 h-5 text-primary" />
+                      ) : (
+                        <Folder className="w-5 h-5 text-muted-foreground" />
+                      )}
+                      {folder.game?.title || 'Outros'}
+                    </h3>
+                    <p className="text-sm text-muted-foreground">
+                      {folder.items.length} {folder.items.length === 1 ? 'item' : 'itens'}
+                    </p>
+                  </div>
+
+                  {/* Arrow */}
+                  <ChevronRight 
+                    className={`w-5 h-5 text-muted-foreground transition-transform duration-300 ${
+                      isOpen ? 'rotate-90' : ''
+                    }`}
+                  />
+                </button>
+
+                {/* Folder Content */}
+                {isOpen && (
+                  <div className="mt-4 ml-4 pl-4 border-l-2 border-primary/30">
+                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                      {folder.items.map((item, index) => (
+                        <div
+                          key={item.id}
+                          className="group relative bg-card rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all duration-300 cursor-pointer animate-fade-in hover:box-glow"
+                          style={{ animationDelay: `${index * 0.05}s` }}
+                          onClick={() => setSelectedMedia(item)}
+                        >
+                          <div className="aspect-video relative overflow-hidden">
+                            <img
+                              src={item.thumbnail_url || item.url}
+                              alt={item.title}
+                              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+                            />
+                            <div className="absolute inset-0 bg-gradient-to-t from-background/90 via-transparent to-transparent" />
+                            
+                            {item.type === "video" && (
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div className="w-12 h-12 rounded-full bg-primary/90 flex items-center justify-center group-hover:scale-110 transition-transform box-glow">
+                                  <Play className="w-5 h-5 text-primary-foreground ml-0.5" />
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="absolute top-2 left-2">
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 bg-background/80 rounded text-xs font-body uppercase text-muted-foreground">
+                                {item.type === "video" ? (
+                                  <>
+                                    <Play className="w-2.5 h-2.5" /> Vídeo
+                                  </>
+                                ) : (
+                                  <>
+                                    <ImageIcon className="w-2.5 h-2.5" /> Foto
+                                  </>
+                                )}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="p-3">
+                            <h3 className="font-display text-sm font-semibold text-foreground line-clamp-1">
+                              {item.title}
+                            </h3>
                           </div>
                         </div>
-                      )}
-
-                      <div className="absolute top-3 left-3">
-                        <span className="inline-flex items-center gap-1 px-2 py-1 bg-background/80 rounded text-xs font-body uppercase text-muted-foreground">
-                          {item.type === "video" ? (
-                            <>
-                              <Play className="w-3 h-3" /> Vídeo
-                            </>
-                          ) : (
-                            <>
-                              <ImageIcon className="w-3 h-3" /> Foto
-                            </>
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="p-4">
-                      <h3 className="font-display text-lg font-semibold text-foreground mb-1 line-clamp-1">
-                        {item.title}
-                      </h3>
+                      ))}
                     </div>
                   </div>
-                ))}
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
-
-        {filteredItems.length === 0 && selectedProject && (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Nenhum item encontrado para este projeto.</p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSelectedProject(null)}
-              className="mt-4"
-            >
-              Ver todos
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Modal */}
@@ -270,7 +275,7 @@ const GallerySection = () => {
               </h3>
               {selectedMedia.games && (
                 <p className="text-primary mt-2 flex items-center gap-2">
-                  <Gamepad2 className="w-4 h-4" />
+                  <Folder className="w-4 h-4" />
                   {selectedMedia.games.title}
                 </p>
               )}
