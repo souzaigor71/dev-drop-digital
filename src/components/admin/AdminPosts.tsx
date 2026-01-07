@@ -50,7 +50,7 @@ const AdminPosts = () => {
     title: '',
     content: '',
     thumbnail_url: '',
-    game_id: '' as string,
+    game_id: 'none' as string,
   });
 
   const fetchPosts = async () => {
@@ -82,7 +82,7 @@ const AdminPosts = () => {
   }, []);
 
   const resetForm = () => {
-    setFormData({ title: '', content: '', thumbnail_url: '', game_id: '' });
+    setFormData({ title: '', content: '', thumbnail_url: '', game_id: 'none' });
     setEditingPost(null);
   };
 
@@ -92,7 +92,7 @@ const AdminPosts = () => {
       title: post.title,
       content: post.content,
       thumbnail_url: post.thumbnail_url || '',
-      game_id: post.game_id || '',
+      game_id: post.game_id || 'none',
     });
     setIsDialogOpen(true);
   };
@@ -134,7 +134,7 @@ const AdminPosts = () => {
       title: formData.title,
       content: formData.content,
       thumbnail_url: formData.thumbnail_url || null,
-      game_id: formData.game_id || null,
+      game_id: formData.game_id === 'none' ? null : formData.game_id,
     };
 
     if (editingPost) {
@@ -268,8 +268,8 @@ const AdminPosts = () => {
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione um projeto" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">Nenhum projeto</SelectItem>
+                  <SelectContent className="bg-card border-border z-50">
+                    <SelectItem value="none">Nenhum projeto</SelectItem>
                     {games.map((game) => (
                       <SelectItem key={game.id} value={game.id}>
                         {game.title}
