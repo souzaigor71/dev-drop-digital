@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Pencil, Trash2, Loader2, Upload, X, Image, Video } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Upload, X, Image, Video, FolderPlus } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -41,9 +41,11 @@ const AdminGallery = () => {
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<GalleryItem | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [newProjectTitle, setNewProjectTitle] = useState('');
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -222,22 +224,84 @@ const AdminGallery = () => {
     );
   }
 
+  const handleCreateProject = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjectTitle.trim()) return;
+    
+    setSubmitting(true);
+    const { data, error } = await supabase
+      .from('games')
+      .insert([{ title: newProjectTitle.trim() }])
+      .select()
+      .single();
+
+    if (error) {
+      toast({ title: 'Erro ao criar projeto', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Projeto criado!' });
+      setNewProjectTitle('');
+      setIsProjectDialogOpen(false);
+      fetchGames();
+      // Auto-select the new project in the form
+      if (data) {
+        setFormData(prev => ({ ...prev, game_id: data.id }));
+      }
+    }
+    setSubmitting(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="font-display text-xl font-bold text-foreground">
           Galeria ({items.length})
         </h2>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) resetForm();
-        }}>
-          <DialogTrigger asChild>
-            <Button variant="gaming">
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Item
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2">
+          {/* Create Project Dialog */}
+          <Dialog open={isProjectDialogOpen} onOpenChange={setIsProjectDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <FolderPlus className="w-4 h-4 mr-2" />
+                Novo Projeto
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-sm">
+              <DialogHeader>
+                <DialogTitle className="font-display">Criar Novo Projeto</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleCreateProject} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Nome do Projeto *</Label>
+                  <Input
+                    value={newProjectTitle}
+                    onChange={(e) => setNewProjectTitle(e.target.value)}
+                    placeholder="Ex: Meu Novo Jogo"
+                    required
+                  />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setIsProjectDialogOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button type="submit" variant="gaming" disabled={submitting || !newProjectTitle.trim()}>
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Criar'}
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Add Item Dialog */}
+          <Dialog open={isDialogOpen} onOpenChange={(open) => {
+            setIsDialogOpen(open);
+            if (!open) resetForm();
+          }}>
+            <DialogTrigger asChild>
+              <Button variant="gaming">
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Item
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="font-display">
@@ -373,6 +437,7 @@ const AdminGallery = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {items.length === 0 ? (

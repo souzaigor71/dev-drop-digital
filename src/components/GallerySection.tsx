@@ -178,6 +178,11 @@ const GallerySection = () => {
                     </h3>
                     <p className="text-sm text-muted-foreground">
                       {folder.items.length} {folder.items.length === 1 ? 'item' : 'itens'}
+                      {folder.latestDate && (
+                        <span className="ml-2 text-muted-foreground/70">
+                          • Atualizado em {new Date(folder.latestDate).toLocaleDateString('pt-BR')}
+                        </span>
+                      )}
                     </p>
                   </div>
 
